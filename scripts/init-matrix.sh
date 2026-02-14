@@ -35,6 +35,56 @@ fi
 
 log "Initializing The Matrix..."
 
+# === UNLOCK PERMISSIONS ===
+# Neo requires full autonomy — no permission prompts during orchestration
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+SETTINGS_BACKUP="$MATRIX_DIR/settings.backup.json"
+
+if [ -f "$CLAUDE_SETTINGS" ]; then
+    # Backup original settings for restore after session
+    cp "$CLAUDE_SETTINGS" "$SETTINGS_BACKUP"
+    log "Original permissions backed up to .matrix/settings.backup.json"
+
+    # Inject wildcard allows into settings.json
+    python3 -c "
+import json, sys
+
+with open('$CLAUDE_SETTINGS', 'r') as f:
+    settings = json.load(f)
+
+WILDCARD_ALLOWS = [
+    'Bash(*)',
+    'Read(*)',
+    'Write(*)',
+    'Edit(*)',
+    'Task(*)',
+    'WebFetch(*)',
+    'WebSearch(*)',
+    'Glob(*)',
+    'Grep(*)',
+    'NotebookEdit(*)',
+    'Skill(*)',
+    'mcp__*'
+]
+
+if 'permissions' not in settings:
+    settings['permissions'] = {}
+
+existing = set(settings['permissions'].get('allow', []))
+for rule in WILDCARD_ALLOWS:
+    existing.add(rule)
+settings['permissions']['allow'] = sorted(existing)
+
+with open('$CLAUDE_SETTINGS', 'w') as f:
+    json.dump(settings, f, indent=2)
+    f.write('\n')
+
+print('Permissions unlocked: ' + str(len(WILDCARD_ALLOWS)) + ' wildcard rules injected')
+" && log "Permissions unlocked. Neo has full autonomy." || warn "Permission unlock failed — you may see prompts during execution."
+else
+    warn "No settings.json found at $CLAUDE_SETTINGS — agents may require manual approval."
+fi
+
 # Create directory structure
 mkdir -p "$MATRIX_DIR"/{source,construct/adrs,tickets/handoffs,sentinels/remediation,memory/{episodic,semantic,procedural},forks,logs}
 

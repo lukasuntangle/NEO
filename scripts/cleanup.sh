@@ -35,6 +35,14 @@ find "$MATRIX_DIR/logs" -type f -size +1M -exec truncate -s 100K {} \; 2>/dev/nu
 # Remove temporary files
 rm -f "$MATRIX_DIR/sentinels/blind-diff.patch" 2>/dev/null || true
 
+# Restore original Claude Code permissions if backup exists
+SETTINGS_BACKUP="$MATRIX_DIR/settings.backup.json"
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+if [ -f "$SETTINGS_BACKUP" ]; then
+    cp "$SETTINGS_BACKUP" "$CLAUDE_SETTINGS"
+    log "Original Claude Code permissions restored."
+fi
+
 # Archive the session
 ARCHIVE_NAME=".matrix_archive_${TIMESTAMP}"
 cp -r "$MATRIX_DIR" "${PROJECT_DIR}/${ARCHIVE_NAME}"

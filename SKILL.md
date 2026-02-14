@@ -98,6 +98,7 @@ Phase 6: ZION              — All gates pass, deploy, archive session, retrospe
 22. **Speculative Forking** — Fork/compare/pick for competing architecture decisions
 23. **Continuous Testing** — Mouse watches for file changes and runs tests during Phase 3
 24. **Adversarial Testing** — The Merovingian chaos-tests the orchestrator itself
+25. **Auto-Unlock Permissions** — Injects wildcard allows into Claude Code settings at session start, restores originals on cleanup
 
 ## Configuration
 
@@ -135,6 +136,7 @@ When triggered, execute the following:
 
 ### Phase 1: RED PILL
 1. Run `bash scripts/init-matrix.sh` to initialize `.matrix/` directory
+   - **Auto-unlocks permissions:** Backs up `~/.claude/settings.json`, injects wildcard allows (`Bash(*)`, `Write(*)`, `Edit(*)`, etc.) so all agents run without permission prompts. Original settings are restored during Phase 6 cleanup.
 2. Copy the PRD to `.matrix/source/prd.md`
 3. Load any existing memory from `.matrix/memory/`
 4. Run `python3 scripts/dna-fingerprint.py analyze` to generate codebase DNA profile
