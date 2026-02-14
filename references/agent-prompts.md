@@ -1,6 +1,6 @@
 # Agent Quick Reference
 
-Summary of all 14 agents in the Neo Orchestrator system, grouped by model tier.
+Summary of all 15 agents in the Neo Orchestrator system, grouped by model tier.
 
 ---
 
@@ -59,6 +59,17 @@ Summary of all 14 agents in the Neo Orchestrator system, grouped by model tier.
   - Must scan all new and modified files.
   - Cannot modify code, only report findings.
 - **Spawn:** `bash scripts/spawn-agent.sh trinity sonnet "Security audit of all changes since last checkpoint"`
+
+### Shannon -- Dynamic Security Tester
+- **Character:** Named after Claude Shannon, father of information theory
+- **Model:** sonnet
+- **Role:** Dynamic penetration testing; actively probes the running application for exploitable vulnerabilities.
+- **Constraints:**
+  - Must start the application and test against live endpoints.
+  - Every finding requires a reproducible proof of concept (PoC).
+  - Cross-references Trinity's static findings -- confirms or marks as false positive.
+  - Falls back to code-based analysis if the app cannot start.
+- **Spawn:** `bash scripts/spawn-agent.sh shannon sonnet "Dynamic security testing of running application"`
 
 ### Architect -- The System Designer
 - **Character:** The Architect, creator of the technical Matrix
@@ -165,6 +176,7 @@ Summary of all 14 agents in the Neo Orchestrator system, grouped by model tier.
 | Smith | The Reviewer | opus | Blind code review |
 | Morpheus | Team Lead | sonnet | Agent dispatcher |
 | Trinity | Security Expert | sonnet | Security audit |
+| Shannon | Dynamic Security Tester | sonnet | Dynamic pentest |
 | Architect | System Designer | sonnet | Technical specs |
 | Niobe | Frontend Pilot | sonnet | Frontend implementation |
 | Dozer | Backend Operator | sonnet | Backend implementation |

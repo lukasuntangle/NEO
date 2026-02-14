@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # quality-gate.sh — Sentinel pipeline for Neo Orchestrator
 # Usage: bash quality-gate.sh <gate> [project-dir]
-#   Gates: smith, trinity, switch, all, lint
+#   Gates: smith, trinity, shannon, switch, all, lint
 set -euo pipefail
 
 GATE="${1:?Usage: quality-gate.sh <gate> [project-dir]}"
@@ -41,6 +41,21 @@ import json
 with open('$MATRIX_DIR/session.json') as f:
     print(json.load(f).get('remediation_cycle', 0))
 ")
+
+# Check if a gate has been overridden
+check_gate_override() {
+    local gate_name="$1"
+    python3 -c "
+import json
+with open('$MATRIX_DIR/session.json') as f:
+    s = json.load(f)
+overrides = s.get('gate_overrides', [])
+if '$gate_name' in overrides:
+    print('overridden')
+else:
+    print('active')
+" 2>/dev/null || echo "active"
+}
 
 record_gate_result() {
     local gate_name="$1"
@@ -107,6 +122,13 @@ run_lint() {
 
 # --- Gate: Smith (Blind Code Review) ---
 run_smith() {
+    # Check for override
+    if [ "$(check_gate_override smith)" = "overridden" ]; then
+        warn "Gate 'smith' has been OVERRIDDEN by user. Skipping."
+        record_gate_result "smith" "True" "OVERRIDDEN by user"
+        return 0
+    fi
+
     log "Deploying Agent Smith for blind code review..."
 
     # Prepare blind diff
@@ -194,9 +216,16 @@ except:
     return 1
 }
 
-# --- Gate: Trinity (Security) ---
+# --- Gate: Trinity (Static Security) ---
 run_trinity() {
-    log "Deploying Trinity for security audit..."
+    # Check for override
+    if [ "$(check_gate_override trinity)" = "overridden" ]; then
+        warn "Gate 'trinity' has been OVERRIDDEN by user. Skipping."
+        record_gate_result "trinity" "True" "OVERRIDDEN by user"
+        return 0
+    fi
+
+    log "Deploying Trinity for static security audit..."
 
     # Get list of changed files
     local changed_files
@@ -235,13 +264,128 @@ except:
         return 1
     fi
 
-    log "Trinity security audit passed."
+    log "Trinity static security audit passed."
     record_gate_result "trinity" "True" "No critical security issues"
+    return 0
+}
+
+# --- Gate: Shannon (Dynamic Security) ---
+run_shannon() {
+    # Check for override
+    if [ "$(check_gate_override shannon)" = "overridden" ]; then
+        warn "Gate 'shannon' has been OVERRIDDEN by user. Skipping."
+        record_gate_result "shannon" "True" "OVERRIDDEN by user"
+        return 0
+    fi
+
+    log "Deploying Shannon for dynamic security testing..."
+
+    # Check if the app can be started
+    local app_running=false
+    local app_url="http://localhost:3000"
+
+    # Try to detect if app is already running
+    if curl -s -o /dev/null -w "%{http_code}" "$app_url" 2>/dev/null | grep -q "^[2345]"; then
+        app_running=true
+        log "Application detected at ${app_url}"
+    else
+        # Try to start the app
+        log "Attempting to start application for dynamic testing..."
+        if [ -f "$PROJECT_DIR/package.json" ]; then
+            cd "$PROJECT_DIR"
+            npm run dev &>/dev/null &
+            APP_PID=$!
+            sleep 5
+
+            if curl -s -o /dev/null -w "%{http_code}" "$app_url" 2>/dev/null | grep -q "^[2345]"; then
+                app_running=true
+                log "Application started at ${app_url} (PID: ${APP_PID})"
+            else
+                warn "Could not start application. Shannon falling back to code-based analysis."
+                kill $APP_PID 2>/dev/null || true
+            fi
+            cd - >/dev/null
+        fi
+    fi
+
+    # Load Trinity's findings for cross-reference
+    local trinity_context=""
+    if [ -f "${SENTINEL_DIR}/trinity-security.json" ]; then
+        trinity_context="Trinity's static findings for cross-reference:\n$(cat "${SENTINEL_DIR}/trinity-security.json")"
+    fi
+
+    # Spawn Shannon
+    local shannon_task
+    if [ "$app_running" = true ]; then
+        shannon_task="Perform dynamic security testing against ${app_url}. Test all API endpoints for injection, auth bypass, SSRF, and IDOR. Generate PoC curl commands for every finding. ${trinity_context}"
+    else
+        shannon_task="Perform code-based security analysis simulating dynamic testing. Review all API route handlers for exploitable vulnerabilities. Generate theoretical PoC requests for every finding. ${trinity_context}"
+    fi
+
+    local shannon_result
+    shannon_result=$(bash "$SCRIPTS_DIR/spawn-agent.sh" shannon sonnet \
+        "$shannon_task" \
+        "$PROJECT_DIR" 2>/dev/null) || true
+
+    echo "$shannon_result" > "${SENTINEL_DIR}/shannon-pentest.json"
+
+    # Kill the app if we started it
+    if [ -n "${APP_PID:-}" ]; then
+        kill $APP_PID 2>/dev/null || true
+        wait $APP_PID 2>/dev/null || true
+        log "Application stopped."
+    fi
+
+    # Check for critical/high findings
+    local critical_count
+    critical_count=$(echo "$shannon_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    findings = data.get('findings', data.get('issues_found', []))
+    critical = [f for f in findings if isinstance(f, dict) and f.get('severity') in ('critical', 'high') and f.get('verified', True)]
+    print(len(critical))
+except:
+    print(0)
+" 2>/dev/null || echo "0")
+
+    # Extract cross-reference info
+    local false_positives
+    false_positives=$(echo "$shannon_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    xref = data.get('trinity_cross_reference', {})
+    fp = xref.get('false_positive', [])
+    print(len(fp))
+except:
+    print(0)
+" 2>/dev/null || echo "0")
+
+    if [ "$false_positives" -gt 0 ]; then
+        log "Shannon identified ${false_positives} of Trinity's findings as false positives."
+    fi
+
+    if [ "$critical_count" -gt 0 ]; then
+        err "Shannon confirmed ${critical_count} CRITICAL/HIGH exploitable vulnerabilities!"
+        record_gate_result "shannon" "False" "${critical_count} confirmed exploitable vulnerabilities"
+        return 1
+    fi
+
+    log "Shannon dynamic security audit passed."
+    record_gate_result "shannon" "True" "No confirmed exploitable vulnerabilities"
     return 0
 }
 
 # --- Gate: Switch + Mouse (Tests) ---
 run_switch() {
+    # Check for override
+    if [ "$(check_gate_override switch)" = "overridden" ]; then
+        warn "Gate 'switch' has been OVERRIDDEN by user. Skipping."
+        record_gate_result "switch" "True" "OVERRIDDEN by user"
+        return 0
+    fi
+
     log "Deploying Switch for test verification..."
 
     # Spawn Switch to write/verify tests
@@ -293,7 +437,7 @@ except:
     fi
 }
 
-# --- Run gates ---
+# --- Run all gates ---
 run_all() {
     local failed=0
 
@@ -308,14 +452,21 @@ run_all() {
     echo ""
 
     # Gate 2: Trinity
-    echo -e "${CYAN}━━━ Gate 2: Trinity (Security Audit) ━━━${NC}"
+    echo -e "${CYAN}━━━ Gate 2: Trinity (Static Security) ━━━${NC}"
     if ! run_trinity; then
         failed=$((failed + 1))
     fi
     echo ""
 
-    # Gate 3: Switch + Mouse
-    echo -e "${CYAN}━━━ Gate 3: Switch + Mouse (Tests) ━━━${NC}"
+    # Gate 3: Shannon
+    echo -e "${CYAN}━━━ Gate 3: Shannon (Dynamic Security) ━━━${NC}"
+    if ! run_shannon; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+
+    # Gate 4: Switch + Mouse
+    echo -e "${CYAN}━━━ Gate 4: Switch + Mouse (Tests) ━━━${NC}"
     if ! run_switch; then
         failed=$((failed + 1))
     fi
@@ -359,13 +510,14 @@ with open('$MATRIX_DIR/session.json', 'w') as f:
 
 # Dispatch
 case "$GATE" in
-    lint)    run_lint ;;
-    smith)   run_smith ;;
-    trinity) run_trinity ;;
-    switch)  run_switch ;;
-    all)     run_all ;;
+    lint)     run_lint ;;
+    smith)    run_smith ;;
+    trinity)  run_trinity ;;
+    shannon)  run_shannon ;;
+    switch)   run_switch ;;
+    all)      run_all ;;
     *)
-        err "Unknown gate: $GATE. Must be: lint, smith, trinity, switch, all"
+        err "Unknown gate: $GATE. Must be: lint, smith, trinity, shannon, switch, all"
         exit 1
         ;;
 esac

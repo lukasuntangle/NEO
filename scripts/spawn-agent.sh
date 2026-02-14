@@ -169,3 +169,47 @@ if [ $EXIT_CODE -ne 0 ]; then
 fi
 
 log "Agent ${AGENT_NAME} completed. Log: ${LOG_FILE}"
+
+# --- Persona Drift Detection ---
+# Check if the agent stayed in character by looking for character-specific markers
+if [ -f "$LOG_FILE" ]; then
+    python3 -c "
+import json, sys
+
+agent = '$AGENT_NAME'
+log_content = open('$LOG_FILE').read()
+
+# Character voice markers per agent
+markers = {
+    'neo': ['delegate', 'phase', 'orchestrat'],
+    'oracle': ['path', 'risk', 'architecture', 'graph'],
+    'smith': ['defect', 'issue', 'purpose', 'flaw'],
+    'morpheus': ['dispatch', 'reservation', 'batch', 'free'],
+    'trinity': ['security', 'vulnerability', 'audit', 'finding'],
+    'shannon': ['endpoint', 'injection', 'poc', 'exploit', 'probe'],
+    'architect': ['schema', 'spec', 'contract', 'blueprint', 'adr'],
+    'niobe': ['component', 'responsive', 'accessible', 'ui'],
+    'dozer': ['endpoint', 'route', 'validation', 'query'],
+    'tank': ['docker', 'deploy', 'pipeline', 'environment'],
+    'switch': ['test', 'coverage', 'assertion', 'edge case'],
+    'keymaker': ['key', 'door', 'config', 'single'],
+    'mouse': ['test', 'coverage', 'pass', 'fail'],
+    'trainman': ['memory', 'compress', 'strategy', 'session'],
+    'sati': ['document', 'readme', 'api doc', 'changelog'],
+}
+
+agent_markers = markers.get(agent, [])
+if agent_markers:
+    content_lower = log_content.lower()
+    matches = sum(1 for m in agent_markers if m in content_lower)
+    ratio = matches / len(agent_markers)
+    if ratio < 0.25:
+        print(f'DRIFT_WARNING: Agent {agent} shows low persona adherence ({matches}/{len(agent_markers)} markers). Review output.', file=sys.stderr)
+    else:
+        print(f'PERSONA_OK: Agent {agent} persona check passed ({matches}/{len(agent_markers)} markers).', file=sys.stderr)
+" 2>&1 | while read -r line; do
+        if echo "$line" | grep -q "DRIFT_WARNING"; then
+            warn "$line"
+        fi
+    done
+fi

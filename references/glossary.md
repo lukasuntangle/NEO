@@ -31,6 +31,7 @@ Every developer knows the feeling: staring at a codebase so vast it feels like a
 | **The Oracle** | Architecture planner | Sees the future -- meaning she sees the design before it is built. Decomposes PRDs into architecture and task graphs. Opus tier. |
 | **Morpheus** | Team lead / dispatcher | Believes in the vision and leads the crew. Reads the ticket index, builds execution plans, dispatches agents in parallel batches. Sonnet tier. |
 | **Trinity** | Security specialist | The best at what she does. Runs OWASP audits, scans for secrets, checks for injection vulnerabilities. Sonnet tier. |
+| **Shannon** | Dynamic security tester / pentester | Named after Claude Shannon, father of information theory. Actively probes running systems for exploitable vulnerabilities. Generates PoCs for every finding. Cross-references Trinity's static analysis. Sonnet tier. |
 | **The Architect** | System designer | Creator of the technical Matrix. Produces database schemas, OpenAPI specs, and technical blueprints. Sonnet tier. |
 | **Niobe** | Frontend pilot | Best pilot in the fleet. Navigates UI complexity -- React components, pages, client-side logic. Sonnet tier. |
 | **Dozer** | Backend operator | Keeps the ship running. Implements API endpoints, business logic, database queries. Sonnet tier. |
@@ -54,6 +55,9 @@ Every developer knows the feeling: staring at a codebase so vast it feels like a
 | **There Is No Spoon** | Spec-first thinking | The abstraction is the reality. The OpenAPI spec, the type definitions, the interfaces -- these are the real system. Implementation is just making the spec manifest. |
 | **Follow the White Rabbit** | Debugging / root cause tracing | Tracing an issue from symptom to root cause. Following imports, call stacks, data flows to find where something actually breaks. |
 | **RARV** | Research, Analyze, Reflect, Verify | The four-step cycle every agent follows on every ticket. Research the context, Analyze the approach, Reflect before coding, Verify after coding. |
+| **Dry Run** | Plan without executing | Running Phases 0-2 only to preview the full build plan without writing any implementation code. See what the Construct would look like before jacking in. |
+| **Gate Override** | Bypassing a quality gate | Consciously accepting the risk of skipping a sentinel. Logged prominently and tracked in episodic memory. The override does not make the sentinel go away -- it makes you responsible for what it would have caught. |
+| **Session Resume** | Resuming an interrupted session | When a session is interrupted (crash, timeout, manual pause), `/neo resume` picks up where it left off. Reads session.json, resets stale tickets, releases old reservations, and re-enters the current phase. |
 
 ---
 
@@ -63,6 +67,7 @@ Every developer knows the feeling: staring at a codebase so vast it feels like a
 |-------------|-------------------|---------|
 | **The Nebuchadnezzar** | The development environment | The ship from which agents operate. The local machine, the `.matrix/` directory, the tools and scripts. |
 | **The Construct (place)** | `.matrix/construct/` directory | Where architecture documents, schemas, and specs are stored before implementation begins. |
+| **ADR (Architecture Decision Record)** | `.matrix/construct/adrs/` directory | Where the Architect records every significant design decision. Each ADR captures what was decided, why, and what the consequences are. Numbered sequentially: ADR-001, ADR-002, etc. |
 | **The Matrix (place)** | `src/` directory | The actual codebase where implementation lives. |
 | **Zion (place)** | Production / deployed state | The final destination. Where code goes after passing all gates. |
 | **The Trainman's Station** | `.matrix/memory/` directory | Between sessions, this is where knowledge persists. The transition point between one session and the next. |
@@ -86,4 +91,10 @@ Major refactor        = Free Your Mind
 Spec-first approach   = There Is No Spoon
 Debugging             = Follow the White Rabbit
 Agent work cycle      = RARV
+Plan only             = Dry Run
+Skip a gate           = Gate Override
+Continue session      = Resume (plug back in)
+Design decisions      = ADRs
+Active pentesting     = Shannon probes
+Team blueprints       = Templates loaded
 ```

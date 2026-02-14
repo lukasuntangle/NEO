@@ -36,7 +36,7 @@ fi
 log "Initializing The Matrix..."
 
 # Create directory structure
-mkdir -p "$MATRIX_DIR"/{source,construct,tickets,sentinels/remediation,memory/{episodic,semantic,procedural},logs}
+mkdir -p "$MATRIX_DIR"/{source,construct/adrs,tickets,sentinels/remediation,memory/{episodic,semantic,procedural},logs}
 
 # Create config.json
 cat > "$MATRIX_DIR/config.json" << 'CONFIGEOF'
@@ -53,6 +53,7 @@ cat > "$MATRIX_DIR/config.json" << 'CONFIGEOF'
     "dozer": "sonnet",
     "tank": "sonnet",
     "switch": "sonnet",
+    "shannon": "sonnet",
     "keymaker": "haiku",
     "mouse": "haiku",
     "trainman": "haiku",

@@ -1,6 +1,6 @@
 # Quality Gates (Sentinels)
 
-Phase 5 of the Neo Orchestrator workflow. Three independent quality gates must all pass before code reaches Zion. Each gate targets a different failure category to provide defense in depth.
+Phase 5 of the Neo Orchestrator workflow. Four independent quality gates must all pass before code reaches Zion. Each gate targets a different failure category to provide defense in depth.
 
 ---
 
@@ -185,7 +185,90 @@ Regex patterns for:
 
 ---
 
-## Gate 3: Switch + Mouse -- Test Coverage
+## Gate 3: Shannon -- Dynamic Security Testing
+
+**Agent:** Shannon (sonnet)
+**Purpose:** Actively probe the running application for exploitable vulnerabilities. While Trinity performs static analysis, Shannon attacks the live system to confirm or deny findings.
+
+**Named after:** Claude Shannon, father of information theory — because every vulnerability is information leaking where it shouldn't.
+
+### Testing Phases
+
+1. **Reconnaissance** — Map all exposed endpoints, identify input vectors, catalog authentication mechanisms
+2. **Authentication Testing** — Attempt auth bypass, token manipulation, session fixation, credential stuffing patterns
+3. **Injection Testing** — SQL injection, NoSQL injection, command injection, LDAP injection, template injection against live endpoints
+4. **Authorization Testing** — IDOR attempts, privilege escalation, horizontal access control bypass, missing function-level access control
+5. **Business Logic Testing** — Race conditions, workflow bypass, parameter tampering, mass assignment
+
+### Cross-Reference with Trinity
+
+Shannon explicitly cross-references Trinity's static findings:
+- **Confirmed:** Trinity found it statically, Shannon exploited it dynamically. High confidence — real vulnerability.
+- **False Positive:** Trinity flagged it, but Shannon could not exploit it. The code path may be unreachable or properly mitigated.
+- **New Finding:** Shannon found something Trinity missed. Dynamic-only vulnerability (e.g., race condition, timing attack).
+
+### PoC Requirement
+
+Every finding must include a **proof of concept** — a reproducible curl command or script that demonstrates the vulnerability. Findings without PoCs are classified as `unverified` and do not trigger gate failure.
+
+### Severity Levels
+
+| Severity | Definition | Gate Impact |
+|----------|-----------|-------------|
+| critical | Confirmed exploitable with PoC. Data breach, auth bypass, RCE. | Automatic gate failure. |
+| high | Confirmed exploitable but limited blast radius. | Gate failure if 2+ found. |
+| medium | Exploitable but requires specific conditions. | Noted, does not block. |
+| low | Theoretical or requires insider access. | Noted, does not block. |
+
+### Output Format
+
+`.matrix/sentinels/shannon-pentest.json`:
+```json
+{
+  "gate": "shannon-pentest",
+  "status": "pass" | "fail",
+  "app_started": true,
+  "endpoints_tested": 15,
+  "findings": [
+    {
+      "id": "SHAN-001",
+      "severity": "critical",
+      "category": "injection",
+      "endpoint": "POST /api/users/search",
+      "description": "SQL injection via unparameterized query in search filter",
+      "poc": "curl -X POST http://localhost:3000/api/users/search -H 'Content-Type: application/json' -d '{\"filter\": \"' OR 1=1 --\"}'",
+      "trinity_cross_ref": "SEC-003 (confirmed)",
+      "remediation": "Use parameterized queries for all user-supplied search filters"
+    }
+  ],
+  "trinity_cross_reference": {
+    "confirmed": ["SEC-003"],
+    "false_positives": ["SEC-005"],
+    "not_tested": []
+  },
+  "summary": {
+    "critical": 1,
+    "high": 0,
+    "medium": 2,
+    "low": 1,
+    "total": 4
+  },
+  "timestamp": "ISO-8601"
+}
+```
+
+### Pass/Fail Criteria
+
+- **Pass:** 0 critical findings AND fewer than 2 high findings (all with PoCs)
+- **Fail:** Any critical finding with PoC OR 2+ high findings with PoCs
+
+### Fallback Mode
+
+If the application cannot be started (e.g., missing database, environment variables), Shannon falls back to **code-based analysis** — reviewing endpoint handlers, middleware chains, and request processing code for vulnerabilities that would be dynamically testable. Findings from fallback mode are marked as `static_fallback: true` and are treated with lower confidence.
+
+---
+
+## Gate 4: Switch + Mouse -- Test Coverage
 
 **Agent (writing):** Switch (sonnet)
 **Agent (running):** Mouse (haiku)
@@ -344,3 +427,28 @@ If 3 remediation cycles are exhausted without all gates passing:
    - Explain what was tried and why it failed.
    - Recommend specific manual interventions.
    - Ask the user whether to: retry with guidance, skip the failing gate, or abort the session.
+
+---
+
+## Gate Override Mechanism
+
+The user can bypass a specific gate using `/neo gate override <gate>`. This is an escape hatch for situations where a gate is failing on a non-blocking issue or where the user has accepted the risk.
+
+### Override Behavior
+
+1. The override is recorded in `session.json` under `gate_overrides`:
+   ```json
+   {
+     "gate_overrides": ["shannon"]
+   }
+   ```
+2. When `quality-gate.sh` runs, it checks for overrides before executing each gate.
+3. An overridden gate is marked as `overridden` (not `passed`) in the gate log.
+4. A warning is logged in `.matrix/sentinels/gate-log.json`.
+5. The override is recorded in episodic memory for future reference.
+
+### Important
+
+- Overrides should be rare. The system logs them prominently because skipping a quality gate is a conscious risk acceptance.
+- Overridden gates are included in the session retrospective with a note.
+- If multiple sessions override the same gate, the Trainman will flag this as a concerning pattern in cross-session analysis.

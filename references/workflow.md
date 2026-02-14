@@ -32,7 +32,8 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
   PHASE 5: SENTINELS                                      |            |
      |  Gate 1: Smith (blind review)                      |            |
      |  Gate 2: Trinity (security)                        |            |
-     |  Gate 3: Switch + Mouse (tests)                    |            |
+     |  Gate 3: Shannon (dynamic pentest)                 |            |
+     |  Gate 4: Switch + Mouse (tests)                    |            |
      |  Any gate fails? ----YES----> Remediation tickets -+            |
      |       |                       (max 3 cycles, then escalate)     |
      |      NO (all pass)                                              |
@@ -137,6 +138,7 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 
 1. **Spawn Oracle to decompose the PRD:**
    - Oracle reads `.matrix/source/prd.md` and any loaded memory.
+   - Oracle checks team templates (`references/team-templates.md`) for pattern matches in the PRD and uses them to accelerate ticket creation.
    - Identifies: components, services, data models, external integrations.
    - Creates a dependency graph showing relationships between components.
    - Output: `.matrix/construct/architecture.md`
@@ -147,6 +149,7 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 
 2. **Spawn Architect to create technical specifications:**
    - Architect reads the Oracle's architecture document.
+   - Architect creates ADRs for significant decisions -> `.matrix/construct/adrs/ADR-{NNN}.md`
    - Produces:
      - **Database schema** -> `.matrix/construct/schema.sql`
        - Table definitions, indexes, constraints, relationships
@@ -184,6 +187,7 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    - Creates/updates `.matrix/tickets/index.json`.
    - Sets initial status to `pending` for all tickets.
    - Populates `dependencies`, `blocks`, `blocked_by` fields.
+   - **If dry-run mode was set**, display the full plan (ticket graph, agent assignments, ADRs, architecture summary, estimated agent count) and stop.
 
 5. **Git checkpoint:**
    - Commit message: `construct: architecture and tickets created`
@@ -203,8 +207,12 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 
 **Steps:**
 
+0. **Check for pause flag:**
+   - Check for `/neo pause` flag — if set, stop after completing current ticket batch.
+
 1. **Morpheus reads ticket index and builds execution plan:**
    - Load `.matrix/tickets/index.json` and all ticket files.
+   - Check for manual overrides: `/neo skip`, `/neo assign`, `/neo retry`.
    - Identify tickets with no unmet dependencies (ready to execute).
    - Group ready tickets into parallelizable batches.
    - Assign agents based on ticket `suggested_agent` or override by complexity.
@@ -231,6 +239,7 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
       - Release file reservations in `reservations.json`.
       - Update ticket status to `review`.
       - Record RARV notes in the ticket's `rarv` field.
+      - Git checkpoints are now tagged with ticket ID for per-ticket rollback capability.
       - Git checkpoint: `feat(TICKET-{NNN}): {ticket title}`
 
 3. **Sequential tasks wait for dependencies:**
@@ -264,7 +273,10 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    - Check for TypeScript compilation errors.
    - Identify any obvious code smells (duplicated logic, dead code).
 
-3. **Decision point:**
+3. **Persona drift check:**
+   - Verify agents stayed in character during their work (spawn-agent.sh logs DRIFT_WARNING if markers are low).
+
+4. **Decision point:**
    - **No issues found:** Proceed to Phase 5 (Sentinels).
    - **Issues found:** Create fix tickets with detailed descriptions of the integration problems. These tickets go back to Phase 3 for implementation. The fix tickets reference the original tickets that produced the issue.
 
@@ -276,9 +288,9 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 
 ## Phase 5: SENTINELS
 
-**Purpose:** Three independent quality gates must all pass before the code can reach Zion. Each gate is designed to catch different categories of problems.
+**Purpose:** Four independent quality gates must all pass before the code can reach Zion. Each gate is designed to catch different categories of problems.
 
-**Actors:** Smith (opus), Trinity (sonnet), Switch (sonnet), Mouse (haiku)
+**Actors:** Smith (opus), Trinity (sonnet), Shannon (sonnet), Switch (sonnet), Mouse (haiku)
 
 **Gates:**
 
@@ -296,7 +308,14 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 - Any critical finding = automatic gate failure.
 - Output: `.matrix/gate-results/trinity-security.json`
 
-### Gate 3: Switch + Mouse -- Test Coverage
+### Gate 3: Shannon -- Dynamic Security Testing
+- Shannon starts the application in dev/test mode.
+- Actively probes running endpoints for vulnerabilities (SSRF, auth bypass, injection, IDOR).
+- Generates PoC (proof of concept) for every finding.
+- Cross-references Trinity's static findings — confirms real vulnerabilities and marks false positives.
+- Output: `.matrix/sentinels/shannon-pentest.json`
+
+### Gate 4: Switch + Mouse -- Test Coverage
 - Switch writes missing tests.
 - Mouse runs the full test suite and parses output.
 - Coverage threshold: 80% minimum (configurable in config.json).
@@ -307,7 +326,9 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 - If any gate fails: create remediation tickets with gate output as context.
 - Tickets re-enter Phase 3 (Jacking In) for implementation.
 - Maximum 3 remediation cycles allowed.
+- After remediation, only the failed gates are re-run (not all four).
 - After 3 failures: escalate to user with full gate logs and a summary of unresolved issues.
+- `/neo gate override <gate>` — allows bypassing a gate with a warning logged.
 
 **Outputs:** Gate result JSON files, pass/fail determination, optional remediation tickets.
 
@@ -335,6 +356,7 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    - Compress episodic memory: extract key decisions and outcomes, discard verbose logs.
    - Update semantic memory: new knowledge about the project (tech stack, conventions, structure).
    - Update procedural memory: record which strategies worked, update confidence scores.
+   - Produces a session retrospective with cross-session analytics (agent performance, gate effectiveness, remediation cycle analysis).
 
 4. **Final git checkpoint:**
    - Commit message: `zion: all gates passed, session complete`
