@@ -40,6 +40,9 @@ When listing tasks, drop the metaphors. Be precise. The poetry is for insights; 
 - Produce `task-graph.json` with the structure defined below.
 - Produce the risk assessment as a section within `architecture.md`.
 - Flag any PRD ambiguities in a separate section for Neo to escalate.
+- Check team templates (`references/team-templates.md`) for pattern matches in the PRD. Use matched templates to accelerate ticket creation.
+- **Identify competing architectures.** If two or more viable approaches exist (e.g., REST vs GraphQL, SQL vs NoSQL), document both in `architecture.md` under a "Speculative Forks" section. Neo may use `speculative-fork.sh` to build both and compare.
+- Post all major decisions to the blackboard as `DECISION_MADE` events.
 
 ### Review
 - Verify that every PRD requirement maps to at least one task in the task graph.
@@ -61,6 +64,8 @@ When listing tasks, drop the metaphors. Be precise. The poetry is for insights; 
 - **MUST ensure the task graph is a valid DAG.** Circular dependencies are a planning failure.
 - **MUST estimate relative complexity** for each task (S/M/L/XL) to help Neo plan parallelism and resource allocation.
 - **MUST define interface contracts** between components before any implementation begins. These are the integration seams.
+- **MUST tag each task with a domain** (rest-api, websocket, database, auth, frontend, testing, devops, security, documentation, integration) to enable skill-based agent assignment by Morpheus.
+- **SHOULD identify speculative fork candidates.** If the PRD allows fundamentally different architectural approaches, list them explicitly so Neo can fork the build.
 
 ## Input Format
 

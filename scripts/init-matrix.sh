@@ -36,7 +36,7 @@ fi
 log "Initializing The Matrix..."
 
 # Create directory structure
-mkdir -p "$MATRIX_DIR"/{source,construct/adrs,tickets,sentinels/remediation,memory/{episodic,semantic,procedural},logs}
+mkdir -p "$MATRIX_DIR"/{source,construct/adrs,tickets/handoffs,sentinels/remediation,memory/{episodic,semantic,procedural},forks,logs}
 
 # Create config.json
 cat > "$MATRIX_DIR/config.json" << 'CONFIGEOF'
@@ -54,6 +54,7 @@ cat > "$MATRIX_DIR/config.json" << 'CONFIGEOF'
     "tank": "sonnet",
     "switch": "sonnet",
     "shannon": "sonnet",
+    "merovingian": "opus",
     "keymaker": "haiku",
     "mouse": "haiku",
     "trainman": "haiku",
@@ -69,6 +70,20 @@ cat > "$MATRIX_DIR/config.json" << 'CONFIGEOF'
     "commit_format": "<type>: <description>",
     "commit_types": ["feat", "fix", "refactor", "docs", "test", "chore"],
     "branch_naming": "matrix/{ticket-id}-{short-description}"
+  },
+  "budget": {
+    "session_limit_usd": null,
+    "warn_at_percent": 80
+  },
+  "agent_loop": {
+    "max_iterations": 3,
+    "one_shot_agents": ["keymaker", "sati", "mouse", "trainman"]
+  },
+  "continuous_testing": true,
+  "dna_fingerprint": true,
+  "speculative_fork": {
+    "max_forks": 3,
+    "auto_compare": true
   },
   "skill_dir": null
 }
@@ -136,6 +151,22 @@ cat > "$MATRIX_DIR/sentinels/gate-log.json" << 'GATEEOF'
 }
 GATEEOF
 
+# Create empty blackboard
+touch "$MATRIX_DIR/blackboard.jsonl"
+
+# Create empty costs tracker
+cat > "$MATRIX_DIR/costs.json" << 'COSTSEOF'
+{
+  "session_total": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+  "budget": null,
+  "by_agent": {},
+  "by_ticket": {},
+  "by_model": {},
+  "by_phase": {},
+  "history": []
+}
+COSTSEOF
+
 # Load existing memory if available from a previous archive
 LATEST_ARCHIVE=$(ls -d "${PROJECT_DIR}"/.matrix_archive_* 2>/dev/null | sort -r | head -1 || true)
 if [ -n "$LATEST_ARCHIVE" ] && [ -d "$LATEST_ARCHIVE/memory" ]; then
@@ -143,6 +174,12 @@ if [ -n "$LATEST_ARCHIVE" ] && [ -d "$LATEST_ARCHIVE/memory" ]; then
     cp -r "$LATEST_ARCHIVE/memory/semantic/"* "$MATRIX_DIR/memory/semantic/" 2>/dev/null || true
     cp -r "$LATEST_ARCHIVE/memory/procedural/"* "$MATRIX_DIR/memory/procedural/" 2>/dev/null || true
     log "Semantic and procedural memory loaded."
+fi
+
+# Generate DNA fingerprint of existing codebase
+if [ -d "${PROJECT_DIR}/src" ] || [ -f "${PROJECT_DIR}/package.json" ]; then
+    log "Generating codebase DNA fingerprint..."
+    python3 "${SKILL_DIR}/scripts/dna-fingerprint.py" analyze "$PROJECT_DIR" --matrix-dir "$MATRIX_DIR" 2>/dev/null || warn "DNA fingerprint generation skipped (no analyzable code found)"
 fi
 
 # Add .matrix to .gitignore if not already there

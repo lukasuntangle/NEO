@@ -7,6 +7,7 @@ AGENT_NAME="${1:?Usage: spawn-agent.sh <agent-name> <model> <task-description> [
 MODEL="${2:?Model required (opus|sonnet|haiku)}"
 TASK_DESC="${3:?Task description required}"
 PROJECT_DIR="${4:-.}"
+TICKET_ID="${TICKET_ID:-}"
 MATRIX_DIR="${PROJECT_DIR}/.matrix"
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 AGENT_PROMPT_FILE="${SKILL_DIR}/agents/${AGENT_NAME}.md"
@@ -77,6 +78,30 @@ fi
 # Include OpenAPI spec if available
 if [ -f "$MATRIX_DIR/construct/openapi.yaml" ]; then
     CONTEXT="${CONTEXT}\n\n## OpenAPI Spec\n\`\`\`yaml\n$(cat "$MATRIX_DIR/construct/openapi.yaml")\n\`\`\`"
+fi
+
+# Include DNA fingerprint if available
+if [ -f "$MATRIX_DIR/construct/dna-profile.json" ]; then
+    DNA_INSTRUCTIONS=$(python3 -c "import json; print(json.load(open('$MATRIX_DIR/construct/dna-profile.json')).get('agent_instructions', ''))" 2>/dev/null || true)
+    if [ -n "$DNA_INSTRUCTIONS" ]; then
+        CONTEXT="${CONTEXT}\n\n## Codebase DNA Profile\n${DNA_INSTRUCTIONS}"
+    fi
+fi
+
+# Include relevant blackboard context
+if [ -f "$MATRIX_DIR/blackboard.jsonl" ]; then
+    BB_CONTEXT=$(python3 "${SKILL_DIR}/scripts/blackboard.py" context "$AGENT_NAME" --matrix-dir "$MATRIX_DIR" 2>/dev/null || true)
+    if [ -n "$BB_CONTEXT" ]; then
+        CONTEXT="${CONTEXT}\n\n## Blackboard (Recent Events)\n${BB_CONTEXT}"
+    fi
+fi
+
+# Include warm handoff context from upstream tickets
+if [ -n "$TICKET_ID" ]; then
+    HANDOFF_CONTEXT=$(python3 "${SKILL_DIR}/scripts/warm-handoff.py" context "$TICKET_ID" --matrix-dir "$MATRIX_DIR" 2>/dev/null || true)
+    if [ -n "$HANDOFF_CONTEXT" ]; then
+        CONTEXT="${CONTEXT}\n\n${HANDOFF_CONTEXT}"
+    fi
 fi
 
 # Include ticket index for dispatchers
@@ -151,6 +176,13 @@ with open('$MATRIX_DIR/session.json', 'w') as f:
 log "Spawning ${AGENT_NAME} (${MODEL})..."
 log "Task: ${TASK_DESC:0:80}..."
 
+# Post agent start to blackboard
+if [ -f "$MATRIX_DIR/blackboard.jsonl" ]; then
+    python3 "${SKILL_DIR}/scripts/blackboard.py" post "$AGENT_NAME" AGENT_STATUS \
+        "{\"agent\": \"$AGENT_NAME\", \"status\": \"started\", \"ticket_id\": \"${TICKET_ID:-none}\", \"model\": \"$MODEL\"}" \
+        --matrix-dir "$MATRIX_DIR" 2>/dev/null || true
+fi
+
 # Spawn the agent via claude CLI
 # Use -p for print mode (non-interactive), --model for model selection
 echo -e "${FULL_PROMPT}" | claude -p \
@@ -212,4 +244,32 @@ if agent_markers:
             warn "$line"
         fi
     done
+fi
+
+# Post completion to blackboard
+if [ -f "$MATRIX_DIR/blackboard.jsonl" ]; then
+    python3 "${SKILL_DIR}/scripts/blackboard.py" post "$AGENT_NAME" AGENT_STATUS \
+        "{\"agent\": \"$AGENT_NAME\", \"status\": \"completed\", \"ticket_id\": \"${TICKET_ID:-none}\", \"exit_code\": $EXIT_CODE}" \
+        --matrix-dir "$MATRIX_DIR" 2>/dev/null || true
+fi
+
+# Record cost from claude output
+if [ -f "$LOG_FILE" ]; then
+    python3 -c "
+import json, subprocess, sys
+try:
+    data = json.load(open('$LOG_FILE'))
+    usage = data.get('usage', {})
+    input_t = usage.get('input_tokens', 0)
+    output_t = usage.get('output_tokens', 0)
+    if input_t > 0 or output_t > 0:
+        cmd = ['python3', '${SKILL_DIR}/scripts/cost-tracker.py', 'record',
+               '$AGENT_NAME', '$MODEL', str(input_t), str(output_t),
+               '--matrix-dir', '$MATRIX_DIR']
+        if '${TICKET_ID:-}':
+            cmd.extend(['--ticket', '${TICKET_ID}'])
+        subprocess.run(cmd, capture_output=True)
+except:
+    pass
+" 2>/dev/null || true
 fi

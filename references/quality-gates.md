@@ -2,6 +2,8 @@
 
 Phase 5 of the Neo Orchestrator workflow. Four independent quality gates must all pass before code reaches Zion. Each gate targets a different failure category to provide defense in depth.
 
+Each gate posts its results to the blackboard (`.matrix/blackboard.jsonl`) as a `GATE_RESULT` event, enabling other agents and the orchestrator to react to gate outcomes in real time. Gate costs (token usage, model invocations) are tracked in the cost ledger (`.matrix/costs.json`) for budget awareness and session reporting.
+
 ---
 
 ## Gate 1: Agent Smith -- Blind Code Review

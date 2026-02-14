@@ -41,6 +41,7 @@ Every developer knows the feeling: staring at a codebase so vast it feels like a
 | **Mouse** | Test runner / explorer | Curious explorer of the simulation. Runs the full test suite, parses results, reports coverage metrics. Haiku tier. |
 | **The Trainman** | Memory manager | Controls transitions between worlds (sessions). Compresses episodic memory, updates semantic and procedural knowledge. Haiku tier. |
 | **Sati** | Documentation writer | Makes the sunrise -- illuminates the code for others to understand. Generates README, API docs, inline comments. Haiku tier. |
+| **The Merovingian** | Adversarial tester | Chaos monkey for the orchestrator. Tests rollback integrity, file reservation conflicts, ticket state machine, agent failure handling, and pipeline integrity. Opus tier. |
 
 ---
 
@@ -58,6 +59,12 @@ Every developer knows the feeling: staring at a codebase so vast it feels like a
 | **Dry Run** | Plan without executing | Running Phases 0-2 only to preview the full build plan without writing any implementation code. See what the Construct would look like before jacking in. |
 | **Gate Override** | Bypassing a quality gate | Consciously accepting the risk of skipping a sentinel. Logged prominently and tracked in episodic memory. The override does not make the sentinel go away -- it makes you responsible for what it would have caught. |
 | **Session Resume** | Resuming an interrupted session | When a session is interrupted (crash, timeout, manual pause), `/neo resume` picks up where it left off. Reads session.json, resets stale tickets, releases old reservations, and re-enters the current phase. |
+| **Agent Loop** | Iterative agent execution | Run, check, feedback, re-run. Replaces one-shot spawning with a harness that gives agents multiple attempts with feedback between iterations. |
+| **Warm Handoff** | Context transfer between agents | Structured handoff document passed from one agent to the next, preserving decisions, rationale, and open questions. |
+| **Speculative Fork** | Parallel architecture exploration | Fork, compare, pick winner. Multiple competing designs explored in `.matrix/forks/` before committing to one. |
+| **DNA Fingerprint** | Codebase style analysis | Generates a style profile (naming, formatting, idioms) so agents write code that matches the existing codebase. |
+| **Continuous Testing** | Real-time test feedback | Mouse watches for changes during Phase 3, running tests continuously and reporting regressions immediately. |
+| **Chaos Test** | Adversarial system testing | The Merovingian tests the orchestrator itself -- rollback integrity, file reservations, ticket state machine, pipeline integrity. |
 
 ---
 
@@ -71,6 +78,10 @@ Every developer knows the feeling: staring at a codebase so vast it feels like a
 | **The Matrix (place)** | `src/` directory | The actual codebase where implementation lives. |
 | **Zion (place)** | Production / deployed state | The final destination. Where code goes after passing all gates. |
 | **The Trainman's Station** | `.matrix/memory/` directory | Between sessions, this is where knowledge persists. The transition point between one session and the next. |
+| **Blackboard** | `.matrix/blackboard.jsonl` | Shared append-only inter-agent communication log. Agents post events, gate results, and status updates for other agents to read. |
+| **DNA Profile** | `.matrix/construct/dna-profile.json` | Codebase style analysis. Captures naming conventions, formatting patterns, and idioms so agents match the existing style. |
+| **Forks** | `.matrix/forks/` | Speculative architecture fork state. Parallel exploration of competing designs before picking a winner. |
+| **Cost Ledger** | `.matrix/costs.json` | Token usage and cost tracking. Records per-agent and per-phase spending against budget limits. |
 
 ---
 
@@ -97,4 +108,10 @@ Continue session      = Resume (plug back in)
 Design decisions      = ADRs
 Active pentesting     = Shannon probes
 Team blueprints       = Templates loaded
+Agent iteration       = Agent loop
+Shared state          = Blackboard
+Style guide           = DNA profile
+Budget                = Cost tracker
+Architecture A/B test = Speculative fork
+Chaos monkey          = The Merovingian
 ```

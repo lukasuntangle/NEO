@@ -15,31 +15,39 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
      v                                                                 |
   PHASE 1: RED PILL                                                    |
      |  Init .matrix/, copy PRD, load memory, git checkpoint           |
+     |  DNA fingerprint, blackboard init, cost tracking init           |
      v                                                                 |
   PHASE 2: THE CONSTRUCT                                               |
      |  Oracle decomposes -> Architect specs -> Task graph -> Tickets   |
+     |  Speculative forks for competing architectures                  |
      v                                                                 |
   PHASE 3: JACKING IN  <---------------------------------------------+
-     |  Morpheus dispatches agents in parallel batches                 |
+     |  Morpheus dispatches agents via agent loop harness              |
      |  Each agent: reserve files -> RARV cycle -> release -> commit   |
+     |  Continuous testing (Mouse), warm handoffs, blackboard comms    |
+     |  Skill-based assignment, cost-aware model selection             |
      v                                                                 |
   PHASE 4: BULLET TIME                                                 |
      |  Neo reviews holistically: imports, APIs, types                 |
+     |  Blackboard review for unresolved issues                        |
      |  Issues found? ----YES----> Create fix tickets ----+            |
      |       |                                            |            |
      |      NO                                            |            |
+     |  Optional: Merovingian chaos test (/neo chaos-test)|            |
      v                                                    |            |
   PHASE 5: SENTINELS                                      |            |
      |  Gate 1: Smith (blind review)                      |            |
      |  Gate 2: Trinity (security)                        |            |
      |  Gate 3: Shannon (dynamic pentest)                 |            |
      |  Gate 4: Switch + Mouse (tests)                    |            |
+     |  Gate results posted to blackboard                 |            |
      |  Any gate fails? ----YES----> Remediation tickets -+            |
      |       |                       (max 3 cycles, then escalate)     |
      |      NO (all pass)                                              |
      v                                                                 |
   PHASE 6: ZION                                                        |
      |  Docs generated, memory consolidated, session archived          |
+     |  Final cost report, skill tracker updates                       |
      v                                                                 |
    [DONE] -- Status report to user                            [DEPLOYED]
 
@@ -105,12 +113,24 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    - Load episodic memory last (recent history).
    - If no memory exists, this is a fresh project -- proceed with empty memory.
 
-4. **Create initial git checkpoint:**
+4. **Generate DNA fingerprint:**
+   - Analyze the existing codebase for naming conventions, formatting patterns, and idioms.
+   - Output: `.matrix/construct/dna-profile.json` -- used by all agents to match existing style.
+
+5. **Initialize blackboard:**
+   - Create `.matrix/blackboard.jsonl` as the shared append-only inter-agent communication log.
+   - Post initial `SESSION_START` event with session metadata.
+
+6. **Initialize cost tracking:**
+   - Create `.matrix/costs.json` to track token usage and costs per agent and per phase.
+   - Set budget limits from config if configured.
+
+7. **Create initial git checkpoint:**
    - Stage all `.matrix/` initialization files.
    - Commit with message: `red-pill: session initialized`
    - Tag the commit: `red-pill-{timestamp}` (e.g., `red-pill-20250115-143022`)
 
-5. **Initialize session.json:**
+8. **Initialize session.json:**
    ```json
    {
      "session_id": "uuid-v4",
@@ -122,7 +142,7 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    }
    ```
 
-**Outputs:** Initialized `.matrix/` directory, session.json, git checkpoint with tag.
+**Outputs:** Initialized `.matrix/` directory, session.json, DNA profile, blackboard, cost ledger, git checkpoint with tag.
 
 **Failure mode:** If `init-matrix.sh` fails, report the error and do not proceed.
 
@@ -217,7 +237,16 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    - Group ready tickets into parallelizable batches.
    - Assign agents based on ticket `suggested_agent` or override by complexity.
 
-2. **For each parallelizable batch:**
+2. **Agent loop harness replaces one-shot spawning:**
+   - Each agent runs in an iterative loop: execute, check results, receive feedback, re-execute if needed.
+   - The harness manages retries, feedback injection, and convergence detection.
+   - Continuous test watcher (Mouse) runs in the background, reporting regressions in real time.
+
+3. **Skill-based agent assignment and cost-aware model selection:**
+   - Morpheus assigns agents based on skill match (not just `suggested_agent`).
+   - Model tier may be adjusted based on remaining budget tracked in `.matrix/costs.json`.
+
+4. **For each parallelizable batch:**
 
    a. **Reserve files for each agent:**
       - Update `.matrix/tickets/reservations.json` with file locks.
@@ -235,14 +264,23 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
       - **Reflect:** Self-review the plan before writing code.
       - **Verify:** After implementation, verify against acceptance criteria.
 
-   d. **On completion:**
+   d. **Warm handoffs between dependent tasks:**
+      - When an agent completes work that another agent depends on, a structured handoff document is created.
+      - The handoff includes decisions made, rationale, open questions, and context the next agent needs.
+      - Handoffs are posted to the blackboard for traceability.
+
+   e. **Blackboard communication throughout:**
+      - Agents post status updates, warnings, and requests to `.matrix/blackboard.jsonl`.
+      - Other agents and the orchestrator read the blackboard to coordinate.
+
+   f. **On completion:**
       - Release file reservations in `reservations.json`.
       - Update ticket status to `review`.
       - Record RARV notes in the ticket's `rarv` field.
       - Git checkpoints are now tagged with ticket ID for per-ticket rollback capability.
       - Git checkpoint: `feat(TICKET-{NNN}): {ticket title}`
 
-3. **Sequential tasks wait for dependencies:**
+5. **Sequential tasks wait for dependencies:**
    - When a batch completes, Morpheus re-evaluates the ticket index.
    - Newly unblocked tickets enter the next batch.
    - Continue until all tickets are in `review` or `completed` status.
@@ -276,7 +314,16 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
 3. **Persona drift check:**
    - Verify agents stayed in character during their work (spawn-agent.sh logs DRIFT_WARNING if markers are low).
 
-4. **Decision point:**
+4. **Blackboard review for unresolved issues:**
+   - Scan `.matrix/blackboard.jsonl` for any unresolved warnings, agent requests, or anomalies posted during Phase 3.
+   - Surface unresolved items as additional integration concerns.
+
+5. **Optional Merovingian chaos test:**
+   - If invoked via `/neo chaos-test`, spawn the Merovingian to adversarially test the orchestrator itself.
+   - Tests rollback integrity, file reservation conflicts, ticket state machine transitions, agent failure handling, and pipeline integrity.
+   - Output: structured chaos report posted to the blackboard.
+
+6. **Decision point:**
    - **No issues found:** Proceed to Phase 5 (Sentinels).
    - **Issues found:** Create fix tickets with detailed descriptions of the integration problems. These tickets go back to Phase 3 for implementation. The fix tickets reference the original tickets that produced the issue.
 
@@ -362,18 +409,27 @@ Complete phase-by-phase reference for the Neo Orchestrator multi-agent system.
    - Commit message: `zion: all gates passed, session complete`
    - Tag: `zion-{timestamp}`
 
-5. **Session archived:**
+5. **Final cost report:**
+   - Summarize total token usage and costs from `.matrix/costs.json`.
+   - Break down by agent, by phase, and by model tier.
+   - Include in the session retrospective and user-facing status report.
+
+6. **Skill tracker updates:**
+   - Record agent performance metrics (tickets completed, gate pass rates, remediation counts).
+   - Update skill profiles so future sessions benefit from improved agent assignment.
+
+7. **Session archived:**
    - Update `session.json` with `completed_at`, final phase, summary.
    - Move session log to `.matrix/memory/episodic/session-{id}.json`.
 
-6. **Status report to user:**
+8. **Status report to user:**
    - Summary of what was built.
    - Number of tickets completed.
    - Gate results summary.
    - Any notes or recommendations for future work.
    - Links to key files created/modified.
 
-**Outputs:** Documentation, consolidated memory, final git tag, session archive, user-facing status report.
+**Outputs:** Documentation, consolidated memory, final cost report, skill tracker updates, final git tag, session archive, user-facing status report.
 
 **Failure mode:** Phase 6 should not fail. If documentation generation fails, the session is still considered successful -- the code is done.
 

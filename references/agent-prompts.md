@@ -1,6 +1,6 @@
 # Agent Quick Reference
 
-Summary of all 15 agents in the Neo Orchestrator system, grouped by model tier.
+Summary of all 16 agents in the Neo Orchestrator system, grouped by model tier.
 
 ---
 
@@ -35,6 +35,13 @@ Summary of all 15 agents in the Neo Orchestrator system, grouped by model tier.
   - Must find 3+ issues or write >100 word justification for clean pass.
   - Cannot see previous review results to maintain independence.
 - **Spawn:** `bash scripts/spawn-agent.sh smith opus "Blind review of diff: .matrix/gate-results/diff-input.patch"`
+
+### The Merovingian — Adversarial Tester (Opus)
+- **Character:** Sophisticated, philosophical, darkly amused. Speaks of causality and control.
+- **Purpose:** Chaos-test the orchestrator itself — rollback integrity, file reservation conflicts, ticket state machine, agent failure handling, pipeline integrity.
+- **When spawned:** Phase 4 (Bullet Time) or via `/neo chaos-test`
+- **Output:** Structured chaos report with test suites, findings, and severity ratings.
+- **Key constraint:** Tests the build system, not the code. Never modifies source code.
 
 ---
 
@@ -174,6 +181,7 @@ Summary of all 15 agents in the Neo Orchestrator system, grouped by model tier.
 | Neo | The One | opus | Orchestrator |
 | Oracle | The Seer | opus | Architecture planner |
 | Smith | The Reviewer | opus | Blind code review |
+| Merovingian | Adversarial Tester | opus | Chaos testing orchestrator |
 | Morpheus | Team Lead | sonnet | Agent dispatcher |
 | Trinity | Security Expert | sonnet | Security audit |
 | Shannon | Dynamic Security Tester | sonnet | Dynamic pentest |

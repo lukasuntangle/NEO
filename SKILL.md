@@ -5,7 +5,7 @@ triggers:
   - /neo
   - /matrix
   - /red-pill
-description: "Fully autonomous multi-agent orchestrator. Hand it a PRD, walk away, come back to a working product."
+description: "Fully autonomous multi-agent orchestrator with 16 agents, adaptive pipelines, shared blackboard, cost tracking, and adversarial self-testing. Hand it a PRD, walk away, come back to a working product."
 ---
 
 ## Overview
@@ -28,6 +28,13 @@ Neo Orchestrator is a fully autonomous Claude Code skill that combines spec-firs
 /neo retry <ticket-id>        # Force re-run a failed ticket
 /neo gate override <gate>     # Bypass a sentinel gate (with warning)
 /neo assign <ticket-id> <agent> # Manually assign a ticket to an agent
+/neo dashboard                # Launch live Matrix terminal dashboard
+/neo chaos-test               # Run The Merovingian adversarial test suite
+/neo fork <name> "<desc>"     # Create a speculative architecture fork
+/neo fork list                # List active forks
+/neo fork compare             # Compare fork outputs
+/neo fork pick <name>         # Pick winning fork, merge, delete losers
+/neo fork abort               # Abort all forks, return to pre-fork state
 ```
 
 ## Agent Roster
@@ -37,6 +44,7 @@ Neo Orchestrator is a fully autonomous Claude Code skill that combines spec-firs
 | Judgment | Orchestrator | **Neo** | Main loop, RARV cycle, delegation | opus |
 | Judgment | Planner | **The Oracle** | Architecture, PRD decomposition, OpenAPI spec | opus |
 | Judgment | Reviewer | **Agent Smith** | Blind code review, anti-sycophancy | opus |
+| Judgment | Adversarial | **The Merovingian** | Chaos testing orchestrator, rollback integrity, pipeline verification | opus |
 | Implementation | Team Lead | **Morpheus** | Task dispatch, file reservation, parallel coordination | sonnet |
 | Implementation | Static Security | **Trinity** | OWASP audit, secrets scanning, auth review | sonnet |
 | Implementation | Dynamic Security | **Shannon** | Active pentesting, PoC generation, exploit verification | sonnet |
@@ -80,6 +88,16 @@ Phase 6: ZION              — All gates pass, deploy, archive session, retrospe
 12. **Dry-Run Mode** — Plan without executing to preview the full build plan
 13. **Persona Drift Detection** — Agents are checked for character voice compliance
 14. **Session Retrospective** — Cross-session analytics on agent performance and gate effectiveness
+15. **Agent Loop Harness** — Iterative agent execution with feedback between iterations (max 3 loops)
+16. **Shared Blackboard** — Append-only JSONL for real-time inter-agent communication
+17. **Warm Handoffs** — Structured context documents between dependent agents
+18. **DNA Fingerprinting** — Codebase style analysis injected into all agent prompts
+19. **Skill Specialization** — Per-agent success rates by domain inform Morpheus assignments
+20. **Cost-Aware Scheduling** — Token tracking with budgets and automatic model downgrade
+21. **Adaptive Pipeline** — Custom phase DAG per project based on detected features
+22. **Speculative Forking** — Fork/compare/pick for competing architecture decisions
+23. **Continuous Testing** — Mouse watches for file changes and runs tests during Phase 3
+24. **Adversarial Testing** — The Merovingian chaos-tests the orchestrator itself
 
 ## Configuration
 
@@ -89,6 +107,11 @@ The `.matrix/config.json` file controls:
 - Convention overrides (commit format, branch naming)
 - Max remediation cycles (default: 3)
 - Shannon testing scope (full, quick, auth, injection)
+- Budget limits (session cost cap)
+- Agent loop max iterations (default: 3)
+- Continuous testing toggle
+- DNA fingerprinting toggle
+- Speculative fork max forks (default: 3)
 
 ## References
 
@@ -99,6 +122,7 @@ The `.matrix/config.json` file controls:
 - [Ticket Schema](references/ticket-schema.md)
 - [Team Templates](references/team-templates.md)
 - [Glossary](references/glossary.md)
+- [Adversarial Testing](agents/merovingian.md)
 
 ## Instructions for Neo (Orchestrator)
 
@@ -113,8 +137,11 @@ When triggered, execute the following:
 1. Run `bash scripts/init-matrix.sh` to initialize `.matrix/` directory
 2. Copy the PRD to `.matrix/source/prd.md`
 3. Load any existing memory from `.matrix/memory/`
-4. Create initial git checkpoint: `bash scripts/git-checkpoint.sh "red-pill: session start"`
-5. If resuming (`/neo resume`), skip init and load existing session state instead:
+4. Run `python3 scripts/dna-fingerprint.py analyze` to generate codebase DNA profile
+5. Initialize blackboard: `python3 scripts/blackboard.py clear`
+6. Initialize cost tracking (read budget from config if set)
+7. Create initial git checkpoint: `bash scripts/git-checkpoint.sh "red-pill: session start"`
+8. If resuming (`/neo resume`), skip init and load existing session state instead:
    - Read `.matrix/session.json` to determine current phase
    - Read ticket index to find incomplete tickets
    - Resume from the current phase with incomplete work
@@ -126,27 +153,39 @@ When triggered, execute the following:
 2. Spawn The Architect (sonnet): create DB schema, API contracts, OpenAPI spec
    - Architect produces ADRs for every significant decision -> `.matrix/construct/adrs/ADR-{NNN}.md`
 3. Oracle reviews Architect's output, creates task graph in `.matrix/construct/task-graph.json`
-4. Run `python3 scripts/ticket-manager.py create-from-graph .matrix/construct/task-graph.json` to generate tickets
-5. Git checkpoint: `bash scripts/git-checkpoint.sh "construct: architecture and tickets created"`
-6. **If dry-run mode:** Display the full plan (ticket graph, agent assignments, ADRs, architecture summary, estimated agent count) and stop. Report: "The Construct is loaded. Review the plan and run `/neo <prd>` to jack in."
+4. Run `python3 scripts/pipeline-generator.py generate` to create adaptive pipeline DAG
+5. If Oracle identifies competing architectures, offer speculative forking to user
+6. Run `python3 scripts/ticket-manager.py create-from-graph .matrix/construct/task-graph.json` to generate tickets
+7. Git checkpoint: `bash scripts/git-checkpoint.sh "construct: architecture and tickets created"`
+8. **If dry-run mode:** Display the full plan (ticket graph, agent assignments, ADRs, architecture summary, estimated agent count) and stop. Report: "The Construct is loaded. Review the plan and run `/neo <prd>` to jack in."
 
 ### Phase 3: JACKING IN
 1. Check for `/neo pause` flag — if set, stop after completing current ticket batch
-2. Spawn Morpheus (sonnet): reads ticket index, identifies parallelizable tasks, dispatches agents
-3. For each task, Morpheus:
+2. Use adaptive pipeline from `.matrix/construct/pipeline.json` to determine which agents are active
+3. Start continuous test watcher: `bash scripts/continuous-test.sh &`
+4. Spawn Morpheus (sonnet): reads ticket index, identifies parallelizable tasks, dispatches agents
+5. For each task, Morpheus:
+   - Consults `python3 scripts/skill-tracker.py recommend <domain>` for agent assignment
+   - Checks `python3 scripts/cost-tracker.py recommend <complexity>` for model selection
    - Reserves files via `python3 scripts/ticket-manager.py reserve`
-   - Spawns the appropriate agent via `bash scripts/spawn-agent.sh`
+   - Spawns the appropriate agent via `bash scripts/agent-loop.sh` (iterative execution with feedback, max 3 loops)
    - Monitors completion, releases reservations
-4. Each agent follows the RARV cycle for their task
-5. Git checkpoint per completed task (tagged with ticket ID for per-ticket rollback)
-6. Check for manual overrides: `/neo skip`, `/neo assign`, `/neo retry`
+   - After each completed task, creates warm handoff: `python3 scripts/warm-handoff.py create`
+   - Records costs: `python3 scripts/cost-tracker.py record`
+   - Posts updates to blackboard throughout
+6. Each agent follows the RARV cycle for their task
+7. Git checkpoint per completed task (tagged with ticket ID for per-ticket rollback)
+8. Check for manual overrides: `/neo skip`, `/neo assign`, `/neo retry`
 
 ### Phase 4: BULLET TIME
 1. Neo reviews all completed tasks holistically
 2. Cross-task integration verification: do the pieces fit together?
-3. Run `bash scripts/quality-gate.sh lint` for basic quality check
-4. Persona drift check: verify agents stayed in character during their work
-5. If integration issues found, create fix tickets and loop to Phase 3
+3. Review blackboard for unresolved BLOCKER and ISSUE_FOUND events
+4. Run `bash scripts/quality-gate.sh lint` for basic quality check
+5. Persona drift check: verify agents stayed in character during their work
+6. Run Merovingian chaos test if `/neo chaos-test` flag is set
+7. Cost check: if budget > 80% consumed, warn user
+8. If integration issues found, create fix tickets and loop to Phase 3
 
 ### Phase 5: SENTINELS
 1. **Gate 1 — Agent Smith (Blind Review):**
@@ -154,34 +193,45 @@ When triggered, execute the following:
    - Spawn Smith (opus) with blind diffs
    - Smith must find 3+ issues or provide >100 word justification
    - If 0 issues, spawn second Smith clone independently
+   - Post GATE_RESULT to blackboard
+   - Record costs: `python3 scripts/cost-tracker.py record`
 2. **Gate 2 — Trinity (Static Security):**
    - Spawn Trinity (sonnet) for OWASP audit
    - Check for secrets, injection vulnerabilities, auth issues
+   - Post GATE_RESULT to blackboard
+   - Record costs: `python3 scripts/cost-tracker.py record`
 3. **Gate 3 — Shannon (Dynamic Security):**
    - Start the application in dev/test mode
    - Spawn Shannon (sonnet) to actively test endpoints
    - Shannon generates PoCs for every finding
    - Shannon cross-references Trinity's static findings — confirms or marks as false positive
+   - Post GATE_RESULT to blackboard
+   - Record costs: `python3 scripts/cost-tracker.py record`
 4. **Gate 4 — Switch + Mouse (Tests):**
    - Spawn Switch (sonnet) to write/verify tests
    - Spawn Mouse (haiku) to run tests and report coverage
    - Enforce 80% coverage minimum
+   - Post GATE_RESULT to blackboard
+   - Record costs: `python3 scripts/cost-tracker.py record`
 5. Check for `/neo gate override <gate>` — if set, skip the specified gate (with warning logged)
 6. If any gate fails: create remediation tickets, loop to Phase 3 (max 3 cycles)
 7. If max cycles exceeded: escalate to user with detailed report
 
 ### Phase 6: ZION
 1. All gates passed
-2. Spawn Sati (haiku) for documentation
-3. Spawn Trainman (haiku) to consolidate memory AND produce session retrospective:
+2. Record final costs: `python3 scripts/cost-tracker.py report`
+3. Update agent skills: `python3 scripts/skill-tracker.py record` for each completed ticket
+4. Spawn Sati (haiku) for documentation
+5. Spawn Trainman (haiku) to consolidate memory AND produce session retrospective:
    - Agent performance metrics (which agents failed, which succeeded)
    - Gate effectiveness (which gates caught the most issues)
    - Tickets per complexity level
    - Remediation cycle analysis
-4. Final git checkpoint: `bash scripts/git-checkpoint.sh "zion: build complete"`
-5. Run `bash scripts/status-report.sh` for final summary
-6. Run `bash scripts/cleanup.sh` to archive session
-7. Report to user: "Welcome to Zion."
+   - Trainman receives cost data and skill data for retrospective
+6. Final git checkpoint: `bash scripts/git-checkpoint.sh "zion: build complete"`
+7. Run `bash scripts/status-report.sh` for final summary
+8. Run `bash scripts/cleanup.sh` to archive session
+9. Report to user: "Welcome to Zion."
 
 ### Manual Control Commands
 

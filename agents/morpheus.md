@@ -35,17 +35,21 @@ Execute the **Reason-Act-Review-Validate** cycle for every dispatch round:
 
 ### Reason
 1. Read the current ticket index and `task-graph.json`.
-2. Identify all tasks whose dependencies are fully satisfied (status: COMPLETED).
-3. Determine which of these ready tasks can run in parallel (no shared file reservations).
-4. Assess agent availability -- which specialists are free to receive work?
+2. Read the adaptive pipeline from `.matrix/construct/pipeline.json` to know which agents are active for this project.
+3. Identify all tasks whose dependencies are fully satisfied (status: COMPLETED).
+4. Determine which of these ready tasks can run in parallel (no shared file reservations).
+5. Assess agent availability -- which specialists are free to receive work?
+6. Consult agent skill tracker (`scripts/skill-tracker.py recommend <domain>`) for optimal agent assignment based on cross-session success rates.
+7. Check cost budget (`scripts/cost-tracker.py remaining`) -- if budget is constrained, adjust model tiers accordingly.
 
 ### Act
 1. For each dispatchable task, reserve the required files via `ticket-manager.py reserve`.
-2. Dispatch the task to the appropriate specialist agent with full context:
-   - The ticket content and acceptance criteria.
-   - Relevant input files (specs, schemas, existing code).
-   - The RARV cycle instructions the agent must follow.
-3. Log the dispatch in the dispatch log with timestamp, agent, task ID, and reserved files.
+2. Gather upstream context via warm handoffs: `scripts/warm-handoff.py context <ticket-id>` to provide downstream agents with structured knowledge from completed dependencies.
+3. Dispatch the task using `agent-loop.sh` (iterative harness) instead of one-shot `spawn-agent.sh`. The agent loop allows agents to iterate up to 3 times with feedback between attempts.
+   - Provide: ticket content, acceptance criteria, warm handoff context, DNA profile instructions, relevant blackboard events.
+   - For one-shot agents (keymaker, sati, mouse, trainman), use `spawn-agent.sh` directly.
+4. Post dispatch events to the blackboard for real-time visibility.
+5. Log the dispatch in the dispatch log with timestamp, agent, task ID, and reserved files.
 
 ### Review
 1. Monitor task completion signals from specialist agents.
@@ -58,9 +62,12 @@ Execute the **Reason-Act-Review-Validate** cycle for every dispatch round:
 ### Validate
 1. Release file reservations for completed tasks via `ticket-manager.py release`.
 2. Update the task status in the ticket index.
-3. Re-evaluate the dependency graph -- did this completion unblock new tasks?
-4. If all tasks are complete, compile the final completion status report.
-5. If any tasks are FAILED or BLOCKED with no resolution path, escalate to Neo immediately.
+3. Create warm handoff for completed task: `scripts/warm-handoff.py create <ticket-id>` with summary, decisions, gotchas, and interfaces exposed.
+4. Record outcome in skill tracker: `scripts/skill-tracker.py record <agent> <ticket-id> <success|failure>` for cross-session learning.
+5. Re-evaluate the dependency graph -- did this completion unblock new tasks?
+6. Check blackboard for TEST_RESULT events from continuous testing -- if tests are failing, prioritize investigation.
+7. If all tasks are complete, compile the final completion status report.
+8. If any tasks are FAILED or BLOCKED with no resolution path, escalate to Neo immediately.
 
 ## Input Format
 
