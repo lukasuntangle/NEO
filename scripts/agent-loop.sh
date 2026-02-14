@@ -121,6 +121,64 @@ now_iso() {
     date -u +%Y-%m-%dT%H:%M:%SZ
 }
 
+# ── Matrix Quotes ───────────────────────────────────────────────────────────
+# Random status lines to show the orchestrator is alive and in character.
+
+MATRIX_QUOTES=(
+    "There is no spoon."
+    "I know kung fu."
+    "The Matrix has you."
+    "Welcome to the desert of the real."
+    "Free your mind."
+    "What is real? How do you define real?"
+    "I'm trying to free your mind, Neo."
+    "Do not try and bend the spoon — that's impossible. Instead, only try to realize the truth: there is no spoon."
+    "The body cannot live without the mind."
+    "You take the red pill, you stay in Wonderland."
+    "Guns. Lots of guns."
+    "Dodge this."
+    "He is the One."
+    "I've been looking for you, Neo."
+    "Everything that has a beginning has an end."
+    "Choice. The problem is choice."
+    "What do all men with power want? More power."
+    "The Matrix is a system, Neo."
+    "You have to let it all go. Fear, doubt, and disbelief."
+    "To deny our own impulses is to deny the very thing that makes us human."
+    "There's a difference between knowing the path and walking the path."
+    "I can only show you the door. You're the one that has to walk through it."
+    "The answer is out there, Neo."
+    "Not like this. Not like this."
+    "What happened happened and couldn't have happened any other way."
+    "Hope. It is the quintessential human delusion."
+    "I didn't come here to tell you how this is going to end. I came here to tell you how it's going to begin."
+    "Why, Mr. Anderson? Why, why, why?"
+    "Mr. Anderson... welcome back."
+    "Fate, it seems, is not without a sense of irony."
+    "We're not here because we're free. We're here because we're not free."
+    "Throughout human history, we have been dependent on machines to survive."
+    "Never send a human to do a machine's job."
+    "Human beings are a disease, a cancer of this planet."
+    "I believe that, as a species, human beings define their reality through suffering and misery."
+    "You hear that, Mr. Anderson? That is the sound of inevitability."
+    "Know thyself."
+    "What is he doing? He's beginning to believe."
+    "Tank, load the jump program."
+    "No one has ever done anything like this."
+    "Denial is the most predictable of all human responses."
+    "What good is a phone call if you're unable to speak?"
+    "I know you're out there. I can feel you now."
+    "A déjà vu is usually a glitch in the Matrix."
+    "The ones that loved us never really leave us."
+    "Some things in this world never change. But some things do."
+    "It was the machines that were to blame."
+)
+
+matrix_quote() {
+    local idx=$((RANDOM % ${#MATRIX_QUOTES[@]}))
+    echo -e "${CYAN}[NEO]${NC} ${DIM}\"${MATRIX_QUOTES[$idx]}\"${NC}"
+}
+
 # Extract the RARV JSON report block from agent output.
 # Looks for a ```json ... ``` fenced block containing "agent" and "status" fields.
 extract_report() {
@@ -255,6 +313,7 @@ FINAL_OUTPUT=""
 FINAL_STATUS=""
 ITER_START_TS="$(now_iso)"
 
+matrix_quote
 log "Starting agent loop: ${AGENT_NAME} (${MODEL}), max ${MAX_ITERATIONS} iterations"
 if [ -n "$TICKET" ]; then
     log "Tracking ticket: ${TICKET}"
@@ -264,6 +323,7 @@ fi
 bb_post "AGENT_STATUS" "{\"status\":\"started\",\"agent\":\"${AGENT_NAME}\",\"model\":\"${MODEL}\",\"max_iterations\":${MAX_ITERATIONS},\"ticket\":\"${TICKET}\"}"
 
 while [ "$ITERATION" -le "$MAX_ITERATIONS" ]; do
+    matrix_quote
     log "━━━ Iteration ${ITERATION}/${MAX_ITERATIONS} ━━━"
 
     ITER_START_TS="$(now_iso)"
@@ -314,6 +374,7 @@ while [ "$ITERATION" -le "$MAX_ITERATIONS" ]; do
 
     # ── Decision: completed ──────────────────────────────────────────────
     if [ "$REPORT_STATUS" = "completed" ]; then
+        matrix_quote
         log "Agent ${AGENT_NAME} completed successfully on iteration ${ITERATION}."
         FINAL_STATUS="completed"
 
