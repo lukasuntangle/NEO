@@ -194,6 +194,29 @@ elif [ -d "${PROJECT_DIR}/.git" ]; then
     log "Created .gitignore with .matrix/"
 fi
 
+# Launch Matrix Dashboard in a new terminal tab (background)
+DASHBOARD_SCRIPT="${SKILL_DIR}/scripts/matrix-dashboard.py"
+if [ -f "$DASHBOARD_SCRIPT" ]; then
+    if command -v osascript &>/dev/null; then
+        # macOS: open in a new Terminal tab
+        osascript -e "
+            tell application \"Terminal\"
+                activate
+                do script \"python3 '$DASHBOARD_SCRIPT' --matrix-dir '$MATRIX_DIR'\"
+            end tell
+        " &>/dev/null &
+        log "Dashboard launched in new Terminal tab."
+    elif command -v gnome-terminal &>/dev/null; then
+        gnome-terminal -- python3 "$DASHBOARD_SCRIPT" --matrix-dir "$MATRIX_DIR" &>/dev/null &
+        log "Dashboard launched in new terminal."
+    elif command -v tmux &>/dev/null && [ -n "$TMUX" ]; then
+        tmux split-window -h "python3 '$DASHBOARD_SCRIPT' --matrix-dir '$MATRIX_DIR'" &>/dev/null &
+        log "Dashboard launched in tmux pane."
+    else
+        log "Dashboard available: python3 $DASHBOARD_SCRIPT --matrix-dir $MATRIX_DIR"
+    fi
+fi
+
 log "The Matrix initialized."
 log "Session: ${SESSION_ID}"
 log "Directory: ${MATRIX_DIR}"

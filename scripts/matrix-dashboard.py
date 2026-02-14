@@ -181,7 +181,10 @@ class DashboardState:
 
     @property
     def budget(self):
-        return self.costs.get("budget", None)
+        b = self.costs.get("budget", None)
+        if isinstance(b, dict):
+            return b.get("limit_usd", None)
+        return b
 
     @property
     def cost_by_model(self):
