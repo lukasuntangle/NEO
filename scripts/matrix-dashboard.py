@@ -20,7 +20,7 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-RAIN_CHARS = list("01.:+*#@%&=~^ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘ")
+RAIN_CHARS = list("01.:+*#@%&=~^ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱｶﾀﾅﾏﾔﾗ")
 
 AGENT_ROLES = {
     "neo": "orchestrate",
@@ -81,6 +81,116 @@ C_WHITE = 7
 C_GREEN_ON_GREEN = 8
 C_MAGENTA = 9
 C_RAIN = 10
+
+# ---------------------------------------------------------------------------
+# Matrix rain simulation
+# ---------------------------------------------------------------------------
+
+
+class RainDrop:
+    """A single falling stream in a column."""
+
+    __slots__ = ("y", "speed", "length", "chars", "tick", "cooldown")
+
+    def __init__(self, max_y):
+        self.y = random.randint(-20, -1)
+        self.speed = random.uniform(0.3, 1.0)
+        self.length = random.randint(4, max(6, max_y // 2))
+        self.chars = [random.choice(RAIN_CHARS) for _ in range(self.length)]
+        self.tick = 0.0
+        self.cooldown = 0
+
+
+class RainSimulation:
+    """Full-screen falling Matrix rain with variable-speed streams."""
+
+    def __init__(self, max_y, max_x):
+        self.max_y = max_y
+        self.max_x = max_x
+        self.columns = []
+        self._init_columns()
+
+    def _init_columns(self):
+        self.columns = []
+        for _ in range(self.max_x):
+            drops = []
+            # 60% of columns get a stream initially, staggered starts
+            if random.random() < 0.6:
+                drop = RainDrop(self.max_y)
+                drop.y = random.randint(-self.max_y, self.max_y)
+                drops.append(drop)
+            self.columns.append(drops)
+
+    def resize(self, max_y, max_x):
+        if max_x != self.max_x or max_y != self.max_y:
+            self.max_y = max_y
+            self.max_x = max_x
+            self._init_columns()
+
+    def advance(self):
+        """Move all drops down by their speed. Spawn new streams."""
+        for col_idx, drops in enumerate(self.columns):
+            alive = []
+            for drop in drops:
+                if drop.cooldown > 0:
+                    drop.cooldown -= 1
+                    alive.append(drop)
+                    continue
+
+                drop.tick += drop.speed
+                if drop.tick >= 1.0:
+                    steps = int(drop.tick)
+                    drop.y += steps
+                    drop.tick -= steps
+                    # Randomly mutate a character for digital shimmer
+                    if random.random() < 0.15:
+                        idx = random.randint(0, len(drop.chars) - 1)
+                        drop.chars[idx] = random.choice(RAIN_CHARS)
+
+                # Drop is still visible or hasn't fully entered
+                tail_y = drop.y - drop.length
+                if tail_y < self.max_y:
+                    alive.append(drop)
+
+            self.columns[col_idx] = alive
+
+            # Chance to spawn a new stream in this column
+            if not alive or (len(alive) < 2 and random.random() < 0.008):
+                if random.random() < 0.03:
+                    drop = RainDrop(self.max_y)
+                    drop.y = random.randint(-8, -1)
+                    self.columns[col_idx].append(drop)
+
+    def draw(self, win):
+        """Render rain onto the curses window."""
+        max_y, max_x = win.getmaxyx()
+        for col_idx in range(min(len(self.columns), max_x - 1)):
+            for drop in self.columns[col_idx]:
+                for i in range(drop.length):
+                    row = drop.y - i
+                    if row < 0 or row >= max_y:
+                        continue
+
+                    char = drop.chars[i % len(drop.chars)]
+
+                    if i == 0:
+                        # Head: bright white
+                        attr = curses.color_pair(C_WHITE) | curses.A_BOLD
+                    elif i <= 2:
+                        # Near head: bright green
+                        attr = curses.color_pair(C_BRIGHT_GREEN) | curses.A_BOLD
+                    elif i <= drop.length // 2:
+                        # Middle: normal green
+                        attr = curses.color_pair(C_GREEN)
+                    else:
+                        # Tail: dim green
+                        attr = curses.color_pair(C_DIM_GREEN) | curses.A_DIM
+
+                    try:
+                        win.addstr(row, col_idx, char, attr)
+                    except curses.error:
+                        pass
+
 
 # ---------------------------------------------------------------------------
 # Data loading helpers -- all tolerant of missing files
@@ -328,6 +438,7 @@ def _draw_header(win, state, frame_counter):
     if w < 20 or max_y < 5:
         return 0
 
+    _fill_panel_bg(win, 0, 0, 4, max_x)
     _draw_double_box(win, 0, 0, 4, max_x, _dim(C_GREEN))
 
     # Digital rain line (changes every frame)
@@ -357,6 +468,7 @@ def _draw_header(win, state, frame_counter):
 
 def _draw_agents_panel(win, y, x, h, w, state):
     """Agents panel with activity indicators."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ AGENTS ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 10, "─" * (w - 11) + "┐", _dim(C_GREEN))
     for row in range(1, h - 1):
@@ -385,6 +497,7 @@ def _draw_agents_panel(win, y, x, h, w, state):
 
 def _draw_tickets_panel(win, y, x, h, w, state):
     """Tickets panel with progress bar and status counts."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ TICKETS ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 11, "─" * (w - 12) + "┐", _dim(C_GREEN))
     for row in range(1, h - 1):
@@ -419,6 +532,7 @@ def _draw_tickets_panel(win, y, x, h, w, state):
 
 def _draw_cost_panel(win, y, x, h, w, state):
     """Cost panel with budget bar and per-model breakdown."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ COST ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 8, "─" * (w - 9) + "┐", _dim(C_GREEN))
     for row in range(1, h - 1):
@@ -453,6 +567,7 @@ def _draw_cost_panel(win, y, x, h, w, state):
 
 def _draw_live_feed(win, y, x, h, w, state, scroll_offset):
     """Scrolling blackboard events."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ LIVE FEED ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 13, "─" * (w - 14) + "┐", _dim(C_GREEN))
     for row in range(1, h - 1):
@@ -523,6 +638,7 @@ def _draw_live_feed(win, y, x, h, w, state, scroll_offset):
 
 def _draw_tests_panel(win, y, x, h, w, state):
     """Tests panel with latest results and coverage."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ TESTS ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 9, "─" * (w - 10) + "┐", _dim(C_GREEN))
     for row in range(1, h - 1):
@@ -583,6 +699,7 @@ def _draw_tests_panel(win, y, x, h, w, state):
 
 def _draw_dep_graph(win, y, x, h, w, state):
     """Simplified dependency graph visualization."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ DEPENDENCY GRAPH ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 20, "─" * (w - 21) + "┐", _dim(C_GREEN))
     for row in range(1, h - 1):
@@ -675,11 +792,15 @@ def _draw_footer(win, y, x, w, paused):
         _safe_addstr(win, ky, x + w - 12, "  PAUSED  ", _cp(C_YELLOW, bold=True))
 
 
-def _draw_rain_border(win, y, x, w, frame):
-    """Draw a single line of matrix rain as a decorative border."""
-    random.seed(frame)
-    rain = _rain_line(w - 2)
-    _safe_addstr(win, y, x + 1, rain, _dim(C_GREEN))
+def _fill_panel_bg(win, y, x, h, w):
+    """Fill a panel's interior with spaces to create a solid black background over rain."""
+    max_y, max_x = win.getmaxyx()
+    for row in range(y, min(y + h, max_y)):
+        for col in range(x, min(x + w, max_x - 1)):
+            try:
+                win.addch(row, col, ord(" "))
+            except curses.error:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -689,6 +810,7 @@ def _draw_rain_border(win, y, x, w, frame):
 
 def _draw_detail_tickets(win, y, x, h, w, state):
     """Expanded ticket detail view."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ TICKET DETAIL ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 17, "─" * (w - 18) + "┐", _dim(C_GREEN))
     for row_i in range(1, h - 1):
@@ -726,6 +848,7 @@ def _draw_detail_tickets(win, y, x, h, w, state):
 
 def _draw_detail_cost(win, y, x, h, w, state):
     """Expanded cost detail view."""
+    _fill_panel_bg(win, y, x, h, w)
     _safe_addstr(win, y, x, "┌─ COST DETAIL ", _dim(C_GREEN))
     _safe_addstr(win, y, x + 15, "─" * (w - 16) + "┐", _dim(C_GREEN))
     for row_i in range(1, h - 1):
@@ -781,7 +904,7 @@ def _draw_detail_cost(win, y, x, h, w, state):
 # ---------------------------------------------------------------------------
 
 
-def _draw_all(stdscr, state, frame, paused, scroll_offset, detail_mode, cost_view):
+def _draw_all(stdscr, state, rain, frame, paused, scroll_offset, detail_mode, cost_view):
     stdscr.erase()
     max_y, max_x = stdscr.getmaxyx()
 
@@ -790,6 +913,14 @@ def _draw_all(stdscr, state, frame, paused, scroll_offset, detail_mode, cost_vie
         stdscr.noutrefresh()
         curses.doupdate()
         return
+
+    # --- Background rain ---
+    rain.resize(max_y, max_x)
+    rain.advance()
+    rain.draw(stdscr)
+
+    # --- Footer background (clear rain on last 2 rows for readability) ---
+    _fill_panel_bg(stdscr, max_y - 2, 0, 2, max_x)
 
     # --- Header (rows 0-3) ---
     header_h = _draw_header(stdscr, state, frame)
@@ -873,10 +1004,13 @@ def dashboard_main(stdscr, matrix_dir, refresh_rate):
     _init_colors()
     curses.curs_set(0)
     stdscr.nodelay(True)
-    stdscr.timeout(200)  # getch timeout in ms
+    stdscr.timeout(80)  # getch timeout in ms (~12fps for smooth rain)
 
     state = DashboardState(matrix_dir)
     state.reload()
+
+    max_y, max_x = stdscr.getmaxyx()
+    rain = RainSimulation(max_y, max_x)
 
     frame = 0
     paused = False
@@ -930,7 +1064,7 @@ def dashboard_main(stdscr, matrix_dir, refresh_rate):
 
         # --- Draw ---
         try:
-            _draw_all(stdscr, state, frame, paused, scroll_offset, detail_mode, 0)
+            _draw_all(stdscr, state, rain, frame, paused, scroll_offset, detail_mode, 0)
         except curses.error:
             pass
 
