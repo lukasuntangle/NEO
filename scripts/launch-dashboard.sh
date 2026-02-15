@@ -74,6 +74,21 @@ if command -v osascript &>/dev/null; then
                 end tell
             " &>/dev/null &
             ;;
+        ghostty)
+            osascript -e "
+                tell application \"ghostty\"
+                    activate
+                end tell
+                tell application \"System Events\"
+                    tell process \"ghostty\"
+                        keystroke \"t\" using command down
+                        delay 0.3
+                        keystroke \"${DASHBOARD_CMD}\"
+                        key code 36
+                    end tell
+                end tell
+            " &>/dev/null &
+            ;;
         *)
             osascript -e "
                 tell application \"Terminal\"
