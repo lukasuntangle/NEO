@@ -3,7 +3,7 @@
 # Usage: bash init-matrix.sh [project-dir]
 set -euo pipefail
 
-PROJECT_DIR="${1:-.}"
+PROJECT_DIR="$(cd "${1:-.}" && pwd)"
 MATRIX_DIR="${PROJECT_DIR}/.matrix"
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TIMESTAMP="$(date -u +%Y%m%d_%H%M%S)"
@@ -39,6 +39,9 @@ log "Initializing The Matrix..."
 # Neo requires full autonomy — no permission prompts during orchestration
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 SETTINGS_BACKUP="$MATRIX_DIR/settings.backup.json"
+
+# Ensure .matrix/ exists before writing the backup
+mkdir -p "$MATRIX_DIR"
 
 if [ -f "$CLAUDE_SETTINGS" ]; then
     # Backup original settings for restore after session
@@ -246,22 +249,58 @@ fi
 
 # Launch Matrix Dashboard in a new terminal tab (background)
 DASHBOARD_SCRIPT="${SKILL_DIR}/scripts/matrix-dashboard.py"
+DASHBOARD_CMD="cd '${PROJECT_DIR}' && python3 '${DASHBOARD_SCRIPT}' --matrix-dir '${MATRIX_DIR}'"
+
 if [ -f "$DASHBOARD_SCRIPT" ]; then
     if command -v osascript &>/dev/null; then
-        # macOS: open in a new Terminal tab
-        osascript -e "
-            tell application \"Terminal\"
-                activate
-                do script \"python3 '$DASHBOARD_SCRIPT' --matrix-dir '$MATRIX_DIR'\"
-            end tell
-        " &>/dev/null &
-        log "Dashboard launched in new Terminal tab."
-    elif command -v gnome-terminal &>/dev/null; then
-        gnome-terminal -- python3 "$DASHBOARD_SCRIPT" --matrix-dir "$MATRIX_DIR" &>/dev/null &
-        log "Dashboard launched in new terminal."
-    elif command -v tmux &>/dev/null && [ -n "$TMUX" ]; then
-        tmux split-window -h "python3 '$DASHBOARD_SCRIPT' --matrix-dir '$MATRIX_DIR'" &>/dev/null &
+        # macOS: detect current terminal app
+        TERM_APP=$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || echo "")
+
+        case "$TERM_APP" in
+            iTerm*|iTerm2)
+                osascript -e "
+                    tell application \"iTerm\"
+                        tell current window
+                            create tab with default profile
+                            tell current session
+                                write text \"${DASHBOARD_CMD}\"
+                            end tell
+                        end tell
+                    end tell
+                " &>/dev/null &
+                ;;
+            Warp)
+                osascript -e "
+                    tell application \"Warp\"
+                        activate
+                        delay 0.3
+                    end tell
+                    tell application \"System Events\"
+                        tell process \"Warp\"
+                            keystroke \"t\" using command down
+                            delay 0.3
+                            keystroke \"${DASHBOARD_CMD}\"
+                            key code 36
+                        end tell
+                    end tell
+                " &>/dev/null &
+                ;;
+            *)
+                osascript -e "
+                    tell application \"Terminal\"
+                        activate
+                        do script \"${DASHBOARD_CMD}\"
+                    end tell
+                " &>/dev/null &
+                ;;
+        esac
+        log "Dashboard launched in new ${TERM_APP:-Terminal} tab."
+    elif command -v tmux &>/dev/null && [ -n "${TMUX:-}" ]; then
+        tmux split-window -h "cd '${PROJECT_DIR}' && python3 '${DASHBOARD_SCRIPT}' --matrix-dir '${MATRIX_DIR}'"
         log "Dashboard launched in tmux pane."
+    elif command -v gnome-terminal &>/dev/null; then
+        gnome-terminal -- bash -c "${DASHBOARD_CMD}" &>/dev/null &
+        log "Dashboard launched in new terminal."
     else
         log "Dashboard available: python3 $DASHBOARD_SCRIPT --matrix-dir $MATRIX_DIR"
     fi

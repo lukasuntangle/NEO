@@ -286,6 +286,7 @@ When the user issues manual control commands during execution:
 - **`/neo gate override <gate>`**: Log a warning in gate-log.json. Mark the gate as `overridden` (not `passed`). Proceed to the next gate. The override is recorded in episodic memory.
 - **`/neo assign <ticket-id> <agent>`**: Override the suggested agent for a ticket. Update the ticket's `agent` field. Morpheus respects manual assignments.
 - **`/neo rollback <ticket-id>`**: Use git log to find commits tagged with the ticket ID. Revert only those commits. Update ticket status to `pending`.
+- **`/neo dashboard`**: Relaunch the Matrix Dashboard if it was accidentally closed. Runs `bash scripts/launch-dashboard.sh`. Kills any existing dashboard process for this session before opening a new one. Detects the current terminal app (iTerm2, Warp, Terminal.app) and opens a new tab.
 
 ### Session Resume Flow
 
